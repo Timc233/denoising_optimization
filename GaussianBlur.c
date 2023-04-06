@@ -11,33 +11,45 @@
 
 void gaussian_blur(unsigned char* image, int width, int height, int channels, int kernel_size, float sigma) {
     int radius = kernel_size / 2;
-    float* kernel = (float*) malloc(kernel_size * sizeof(float));
+    float* kernel = (float*) malloc(kernel_size * kernel_size * sizeof(float));
 
-    // Generate Gaussian kernel
+    // Generate 2D Gaussian kernel
     float sum = 0;
-    for (int i = 0; i < kernel_size; i++) {
-        kernel[i] = exp(-((float) (i - radius) * (i - radius)) / (2 * sigma * sigma));
-        sum += kernel[i];
+    for (int y = -radius; y <= radius; y++) {
+        for (int x = -radius; x <= radius; x++) {
+            float value = exp(-(x*x + y*y) / (2 * sigma * sigma));
+            kernel[(y+radius) * kernel_size + (x+radius)] = value;
+            sum += value;
+        }
     }
-    for (int i = 0; i < kernel_size; i++) {
+    for (int i = 0; i < kernel_size * kernel_size; i++) {
         kernel[i] /= sum;
     }
 
-    // Apply Gaussian blur filter
+    // Apply 2D Gaussian blur filter
     unsigned char* temp = (unsigned char*) malloc(width * height * channels * sizeof(unsigned char));
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (int c = 0; c < channels; c++) {
                 float acc = 0;
-                for (int i = 0; i < kernel_size; i++) {
-                    int x2 = x + i - radius;
-                    if (x2 < 0) {
-                        x2 = -x2;
+                for (int ky = -radius; ky <= radius; ky++) {
+                    for (int kx = -radius; kx <= radius; kx++) {
+                        int x2 = x + kx;
+                        int y2 = y + ky;
+                        if (x2 < 0) {
+                            x2 = -x2;
+                        }
+                        if (x2 >= width) {
+                            x2 = 2 * width - x2 - 1;
+                        }
+                        if (y2 < 0) {
+                            y2 = -y2;
+                        }
+                        if (y2 >= height) {
+                            y2 = 2 * height - y2 - 1;
+                        }
+                        acc += kernel[(ky+radius) * kernel_size + (kx+radius)] * image[(y2 * width + x2) * channels + c];
                     }
-                    if (x2 >= width) {
-                        x2 = 2 * width - x2 - 1;
-                    }
-                    acc += kernel[i] * image[(y * width + x2) * channels + c];
                 }
                 temp[(y * width + x) * channels + c] = (unsigned char) round(acc);
             }
@@ -71,15 +83,15 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Convert kernel size argument to integer
+    // Parse kernel size argument
     int kernel_size = atoi(argv[3]);
-    if (kernel_size < 1 || kernel_size > MAX_KERNEL_SIZE || kernel_size % 2 == 0) {
-        printf("Invalid kernel size. Must be odd and between 1 and %d.\n", MAX_KERNEL_SIZE);
+    if (kernel_size % 2 == 0 || kernel_size < 1 || kernel_size > MAX_KERNEL_SIZE) {
+        printf("Kernel size must be an odd integer between 1 and %d\n", MAX_KERNEL_SIZE);
         return -1;
     }
 
     // Apply Gaussian blur filter
-    gaussian_blur(image, width, height, channels, kernel_size, 1.0);
+    gaussian_blur(image, width, height, channels, kernel_size, 1.0f);
 
     // Save output image
     stbi_write_jpg(argv[2], width, height, channels, image, 100);
@@ -87,6 +99,7 @@ int main(int argc, char** argv) {
     // Free memory
     stbi_image_free(image);
 
-		return 0;
+    return 0;
 }
+
    

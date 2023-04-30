@@ -1,3 +1,8 @@
+# Extensionless Executables
+*
+!*/
+!*.*
+
 # Prerequisites
 *.d
 
@@ -50,3 +55,13 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Testing Files
+*.png
+
+# Mac OS
+.DS_Store
+
+# VS Code
+.vscode
+.vscode/*.*

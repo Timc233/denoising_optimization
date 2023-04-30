@@ -1,114 +1,123 @@
 #include "haar_wavelet.h"
+#include <math.h>
+#include "../util/basic_util.h"
+#include "../util/set_data_type.h"
 
-void haar_1d(double* data, int length) {
-    double* temp = (double*)malloc(length * sizeof(double));
 
-    int h = length / 2;
-    for (int i = 0; i < h; i++) {
-        double sum = (data[2 * i] + data[2 * i + 1]) / sqrt(2);
-        double difference = (data[2 * i] - data[2 * i + 1]) / sqrt(2);
-
-        temp[i] = sum;
-        temp[i + h] = difference;
-    }
-
-    for (int i = 0; i < length; i++) {
-        data[i] = temp[i];
-    }
-
-    free(temp);
-}
-
-void inverse_haar_1d(double* data, int length) {
-    double* temp = (double*)malloc(length * sizeof(double));
-
-    int h = length / 2;
-    for (int i = 0; i < h; i++) {
-        double sum = data[i];
-        double difference = data[i + h];
-
-        temp[2 * i] = (sum + difference) / sqrt(2);
-        temp[2 * i + 1] = (sum - difference) / sqrt(2);
-    }
-
-    for (int i = 0; i < length; i++) {
-        data[i] = temp[i];
-    }
-
-    free(temp);
-}
-
-void haar_2d(double* data, int width, int height, int levels) {
-    double* row = (double*)malloc(width * sizeof(double));
-    double* col = (double*)malloc(height * sizeof(double));
-
-    for (int level = 0; level < levels; level++) {
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                row[x] = data[y * width + x];
-            }
-
-            haar_1d(row, width);
-
-            for (int x = 0; x < width; x++) {
-                data[y * width + x] = row[x];
-            }
+/**
+ * Performs the Haar wavelet transform on the given array
+ *
+ * @param {data_t*} data - the array to transform
+ * @param {int} n - the length of the array
+ * 
+ * The resulted transformed array will be stored in the data array.
+ * The order of the output array would be [A_n, D_n, D_n-1, ..., D_1]
+ * 
+ */
+void haar_wavelet_transform_1d(data_t *data, int len) {
+    data_t *output = (data_t *)malloc(len * sizeof(data_t));
+    copy_array(data, output, len);
+    int level = log2(len);
+    int iterations = level - 1;
+    int n = len;
+    for(int i = 0; i < iterations; i++){
+        n = n / 2;
+        data_t *A = (data_t *)malloc(n * sizeof(data_t));
+        data_t *D = (data_t *)malloc(n * sizeof(data_t));
+        for (int i = 0; i < n; i++) {
+            A[i] = (output[i * 2] + output[i * 2 + 1]) / sqrt(2);
+            D[i] = (output[i * 2] - output[i * 2 + 1]) / sqrt(2);
         }
 
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                col[y] = data[y * width + x];
-            }
-
-            haar_1d(col, height);
-
-            for (int y = 0; y < height; y++) {
-                data[y * width + x] = col[y];
-            }
+        for (int i = 0; i < n; i++) {
+            output[i] = A[i];
+            output[n + i] = D[i];
         }
 
-        width /= 2;
-        height /= 2;
+        free(A);
+        free(D);     
     }
 
-    free(row);
-    free(col);
+    copy_array(output, data, len);
+
+    free(output);
 }
 
-void inverse_haar_2d(double* data, int width, int height, int levels) {
-    double* row = (double*)malloc(width * sizeof(double));
-        double* col = (double*)malloc(height * sizeof(double));
+/**
+ * Performs the inverse Haar wavelet transform on the given wavelet coefficients
+ *
+ * @param {data_t*} wavelet_coeffs - the wavelet coefficients to transform
+ * @param {int} n - the length of the wavelet_coeffs array
+ * @returns {data_t*} - the resulting output array
+ * 
+ * The order of the input coefficients array would be [A_n, D_n, D_n-1, ..., D_1]
+ */
+void inverse_haar_wavelet_transform_1d(data_t* wavelet_coeffs, int n) {
+    int level = (int) log2(n);
 
-    for (int level = 0; level < levels; level++) {
-        int current_width = width / (1 << (levels - level - 1));
-        int current_height = height / (1 << (levels - level - 1));
+    int a_length = 2;
 
-        for (int x = 0; x < current_width; x++) {
-            for (int y = 0; y < current_height; y++) {
-                col[y] = data[y * width + x];
-            }
+    int iterations = level - 1;
 
-            inverse_haar_1d(col, current_height);
+    for (int i = 0; i < iterations; i++) {
+        int new_a_length = a_length * 2;
+        data_t* new_a = (data_t*) malloc(new_a_length * sizeof(data_t));
 
-            for (int y = 0; y < current_height; y++) {
-                data[y * width + x] = col[y];
-            }
+        for (int j = 0; j < a_length; j++) {
+            new_a[2*j] = (wavelet_coeffs[j] + wavelet_coeffs[a_length+j]) / sqrt(2);
+            new_a[2*j+1] = (wavelet_coeffs[j] - wavelet_coeffs[a_length+j]) / sqrt(2);
         }
 
-        for (int y = 0; y < current_height; y++) {
-            for (int x = 0; x < current_width; x++) {
-                row[x] = data[y * width + x];
-            }
+        for (int j = 0; j < new_a_length; j++) {
+            wavelet_coeffs[j] = new_a[j];
+        }
 
-            inverse_haar_1d(row, current_width);
+        a_length = new_a_length;
+        free(new_a);
+    }
 
-            for (int x = 0; x < current_width; x++) {
-                data[y * width + x] = row[x];
-            }
+}
+
+void haar_wavelet_transform_2d(data_t *data, int width, int height) {
+    // Row-wise transformation
+    for (int i = 0; i < height; i++) {
+        haar_wavelet_transform_1d(data + i * width, width);
+    }
+
+    // Column-wise transformation
+    data_t *column = (data_t *)malloc(height * sizeof(data_t));
+    for (int j = 0; j < width; j++) {
+        for (int i = 0; i < height; i++) {
+            column[i] = data[i * width + j];
+        }
+        haar_wavelet_transform_1d(column, height);
+        for (int i = 0; i < height; i++) {
+            data[i * width + j] = column[i];
         }
     }
 
-    free(row);
-    free(col);
+    free(column);
 }
+
+void inverse_haar_wavelet_transform_2d(data_t *data, int width, int height) {
+    // Inverse column-wise transformation
+    data_t *column = (data_t *)malloc(height * sizeof(data_t));
+    for (int j = 0; j < width; j++) {
+        for (int i = 0; i < height; i++) {
+            column[i] = data[i * width + j];
+        }
+        inverse_haar_wavelet_transform_1d(column, height);
+        for (int i = 0; i < height; i++) {
+            data[i * width + j] = column[i];
+        }
+    }
+
+    free(column);
+
+    // Inverse row-wise transformation
+    for (int i = 0; i < height; i++) {
+        inverse_haar_wavelet_transform_1d(data + i * width, width);
+    }
+}
+
 

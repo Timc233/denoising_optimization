@@ -1,7 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stdio.h>
-
+#define PRINT_TIME         1
 /*
    Minimal CUDA program, intended just to test ability
    to compile and run a CUDA program
@@ -19,8 +19,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <math.h>
-#include "../dependency/stb/stb_image.h"
-#include "../dependency/stb/stb_image_write.h"
+#include "./stb_image.h"
+#include "./stb_image_write.h"
 // Assertion to check for errors
 #define CUDA_SAFE_CALL(ans) { gpuAssert((ans), (char *)__FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
@@ -76,10 +76,18 @@ int main(int argc, char **argv){
   cudaEvent_t start, stop;
   float elapsed_gpu;
 
+  
+  
+  // create 2d array to hold data in and out
+  
+ 
+
+  // extract pixel from input to array in
+  
   // blurring level
-  float sigma = 1.0;
+  float sigma = 1.5;
   //create a conv kernel
-  int kernel_size = 21;
+  int kernel_size =5;
   float *kernel = (float*) malloc(sizeof(float)* kernel_size * kernel_size);
 
   int half = kernel_size / 2;
@@ -87,15 +95,19 @@ int main(int argc, char **argv){
   //setup the kernel
   for (int i =-half; i<= half;++i){
     for (int j =-half; j<=half;++j){
-      char value = exp(-(i*i+j*j)/(2* sigma * sigma))/(2*M_PI*sigma*sigma);
+      float value = exp(-(i*i+j*j)/(2* sigma * sigma))/(2*M_PI*sigma*sigma);
       kernel[(i+ half) * kernel_size + j+ half ] = value;
       sum+= value;
     }
   }
   // normalize the kernel
-  for(int i =0;i< kernel_size*kernel_size; ++i){
-    kernel[i]/=sum;
-  }
+  float total=0;
+    for (int i = 0; i < kernel_size * kernel_size; i++) {
+        kernel[i] /= sum;
+        printf("%f\n", kernel[i]);
+        total+= kernel[i];
+    }
+    printf("total=%f\n",total);
 
   // Select GPU
   CUDA_SAFE_CALL(cudaSetDevice(0));
@@ -104,7 +116,7 @@ int main(int argc, char **argv){
   float *d_kernel;
 
   // Allocate GPU memory
-  size_t size = sizeof(float)*width*height*channels;
+  size_t size = sizeof(unsigned char)*width*height*channels;
   unsigned char *out = (unsigned char*)malloc(size);
   CUDA_SAFE_CALL(cudaMalloc(&d_in, size));
   CUDA_SAFE_CALL(cudaMalloc(&d_out, size));

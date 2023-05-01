@@ -1,3 +1,10 @@
+/****************************************************************************
+
+
+   gcc -O1 -fopenmp GaussianBlur_OPENMP.c -lrt -o GaussianBlur_OPENMP 
+   
+   OMP_NUM_THREADS=4 ./GaussianBlur_OPENMP balloons_noisy.jpg output_openmp.jpg
+*/
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../dependency/stb/stb_image.h"
@@ -6,43 +13,79 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
+#include <omp.h>
 #define MAX_KERNEL_SIZE 21
-#define SIGMA 3f
+#define SIGMA 3.0
+#define THREADS 4
+
+void detect_threads_setting()
+{
+  long int i, ognt;
+  char * env_ONT;
+
+  /* Find out how many threads OpenMP thinks it is wants to use */
+#pragma omp parallel for
+  for(i=0; i<1; i++) {
+    ognt = omp_get_num_threads();
+  }
+
+  printf("omp's default number of threads is %d\n", ognt);
+
+  /* If this is illegal (0 or less), default to the "#define THREADS"
+     value that is defined above */
+  if (ognt <= 0) {
+    if (THREADS != ognt) {
+      printf("Overriding with #define THREADS value %d\n", THREADS);
+      ognt = THREADS;
+    }
+  }
+
+  omp_set_num_threads(ognt);
+/* Once again ask OpenMP how many threads it is going to use */
+#pragma omp parallel for
+  for(i=0; i<1; i++) {
+    ognt = omp_get_num_threads();
+  }
+  printf("Using %d threads for OpenMP\n", ognt);
+}
 void gaussian_blur(unsigned char* image, int width, int height, int channels, int kernel_size, float* kernel) {
     
     int radius = kernel_size / 2;
-    
+    int y,x,c,x2,y2,ky,kx;
+    float acc;
     // Apply 2D Gaussian blur filter
     unsigned char* temp = (unsigned char*) malloc(width * height * channels * sizeof(unsigned char));
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            for (int c = 0; c < channels; c++) {
-                float acc = 0;
-                for (int ky = -radius; ky <= radius; ky++) {
-                    for (int kx = -radius; kx <= radius; kx++) {
-                        int x2 = x + kx;
-                        int y2 = y + ky;
-                        if (x2 < 0) {
-                            x2 = -x2;
+    #pragma omp parallel shared(y,height,width,radius,x,c, channels,ky,kx, x2,y2,acc,temp,kernel)
+    {   
+        #pragma omp for 
+            for (y = 0; y < height; y++) {
+                for (x = 0; x < width; x++) {
+                    for (c = 0; c < channels; c++) {
+                        acc = 0;
+                        for (ky = -radius; ky <= radius; ky++) {
+                            for (kx = -radius; kx <= radius; kx++) {
+                                x2 = x + kx;
+                                y2 = y + ky;
+                                if (x2 < 0) {
+                                    x2 = -x2;
+                                }
+                                if (x2 >= width) {
+                                    x2 = 2 * width - x2 - 1;
+                                }
+                                if (y2 < 0) {
+                                    y2 = -y2;
+                                }
+                                if (y2 >= height) {
+                                    y2 = 2 * height - y2 - 1;
+                                }
+                                acc += kernel[(ky+radius) * kernel_size + (kx+radius)] * image[(y2 * width + x2) * channels + c];
+                            }
                         }
-                        if (x2 >= width) {
-                            x2 = 2 * width - x2 - 1;
-                        }
-                        if (y2 < 0) {
-                            y2 = -y2;
-                        }
-                        if (y2 >= height) {
-                            y2 = 2 * height - y2 - 1;
-                        }
-                        acc += kernel[(ky+radius) * kernel_size + (kx+radius)] * image[(y2 * width + x2) * channels + c];
+                        temp[(y * width + x) * channels + c] = (unsigned char) round(acc);
                     }
                 }
-                temp[(y * width + x) * channels + c] = (unsigned char) round(acc);
             }
-        }
     }
-
     // Copy blurred image back to input image
     for (int i = 0; i < width * height * channels; i++) {
         image[i] = temp[i];
@@ -106,14 +149,14 @@ int main(int argc, char** argv) {
     printf("total=%f\n",total);
     
     struct timespec time_start, time_stop;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start);
+    clock_gettime(CLOCK_REALTIME, &time_start);
     // Apply Gaussian blur filter
     gaussian_blur(image, width, height, channels, kernel_size, kernel);
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
+    clock_gettime(CLOCK_REALTIME, &time_stop);
     double meas = interval(time_start, time_stop);
     printf("\nAll times are in seconds\n");
     printf("input_size, kernel_size, regular\n");
-    printf("%ld, %ld, %10.4g\n", width * height, kernel_size * kernel_size, meas);
+    printf("%ld, %ld, %g\n", width * height, kernel_size * kernel_size, meas);
     // Save output image
     stbi_write_jpg(argv[2], width, height, channels, image, 100);
 

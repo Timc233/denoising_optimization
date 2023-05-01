@@ -56,7 +56,7 @@ void apply_median_filter_yxc(uint8_t *src, uint8_t *dst, int width, int height, 
     }
 }
 
-void apply_median_filter_(uint8_t *src, uint8_t *dst, int width, int height, int channels, int filter_size) {
+void apply_median_filter_improve_calc(uint8_t *src, uint8_t *dst, int width, int height, int channels, int filter_size) {
     int half_filter = filter_size / 2;
     int offset = filter_size * filter_size;
 
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
     const char *input_file = argv[1];
     const char *output_file = argv[2];
 
-    int filter_size = 2;
+    int filter_size = 3;
 
     int width, height, channels;
     uint8_t *input_image = stbi_load(input_file, &width, &height, &channels, 0);
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
 
     uint8_t *output_image = (uint8_t *)malloc(width * height * channels * sizeof(uint8_t));
 
-    apply_median_filter(input_image, output_image, width, height, channels, filter_size);
+    apply_median_filter_cyx(input_image, output_image, width, height, channels, filter_size);
 
     if (!stbi_write_png(output_file, width, height, channels, output_image, width*channels)) {
         printf("Error writing output image file: %s\n", output_file);
